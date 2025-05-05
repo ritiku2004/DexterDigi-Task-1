@@ -1,0 +1,52 @@
+# Node.js dependencies
+/node_modules/
+/Backend/node_modules/
+
+# Build outputs
+/build/
+/dist/
+/Backend/build/
+/Backend/dist/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+/logs/
+/Backend/logs/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor folders
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Uploaded files (never commit user uploads)
+/uploads/
+/Backend/uploads/
+
+# Optional npm cache
+.npm
+.lock-wscript
+yarn.lock
+package-lock.json
+pnpm-lock.yaml
+
+# MacOS
+ .Spotlight-V100
+ .Trashes
+
+# Windows
+ ehthumbs.db
+ Desktop.ini
