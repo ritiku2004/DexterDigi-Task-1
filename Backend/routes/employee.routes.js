@@ -5,32 +5,30 @@ const path    = require('path');
 const router  = express.Router();
 const Controller = require('../controllers/employee.controller');
 
-// ——— Multer Setup ———
+// Multer storage & filter
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, path.join(__dirname, '../uploads'));
-  },
+  destination: (_req, _file, cb) =>
+    cb(null, path.join(__dirname, '../uploads')),
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname);
     const name = `${file.fieldname}-${Date.now()}${ext}`;
     cb(null, name);
-  }
+  },
 });
 
 const fileFilter = (_req, file, cb) => {
   if (file.fieldname === 'resume') {
-    return cb(null, file.mimetype === 'application/pdf');
+    cb(null, file.mimetype === 'application/pdf');
+  } else {
+    // profileImage or galleryImages
+    cb(null, file.mimetype.startsWith('image/'));
   }
-  if (file.fieldname === 'profileImage') {
-    return cb(null, file.mimetype.startsWith('image/'));
-  }
-  cb(null, false);
 };
 
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 } // max 2 MB per file
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB max per file
 });
 
 router.get("/view", Controller.getAllEmployees);
@@ -41,18 +39,20 @@ router.get('/view/:id', Controller.getEmployeeById);
 router.post(
   '/create',
   upload.fields([
-    { name: 'resume',       maxCount: 1 },
-    { name: 'profileImage', maxCount: 1 }
+    { name: 'resume', maxCount: 1 },
+    { name: 'profileImage', maxCount: 1 },
+    { name: 'galleryImages', maxCount: 10 }, // adjust maxCount as needed
   ]),
   Controller.createEmployee
 );
 
-// Update employee
+
 router.put(
-  "/update/:id",
+  '/update/:id',
   upload.fields([
-    { name: 'resume', maxCount: 1 },
-    { name: 'profileImage', maxCount: 1 }
+    { name: 'resume',       maxCount: 1 },
+    { name: 'profileImage', maxCount: 1 },
+    { name: 'galleryImages', maxCount: 10 },
   ]),
   Controller.updateEmployee
 );

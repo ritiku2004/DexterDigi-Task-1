@@ -2,16 +2,33 @@
 const EmployeeService = require('../services/employee.service');
 const Employee = require("../models/employee.model");
 const mongoose = require('mongoose');
+const fs = require("fs");
+const path = require("path");
+
 exports.createEmployee = async (req, res, next) => {
   try {
-    // multer puts files in req.files
-    const { fullName, email, phone, dob, gender,
-            department, address } = req.body;
+    const {
+      fullName,
+      email,
+      phone,
+      dob,
+      gender,
+      department,
+      address,
+    } = req.body;
     let { skills, isActive } = req.body;
 
-    // basic required‑field check
-    if (!fullName || !email || !phone || !dob || !gender
-        || !skills || !department || !address) {
+    // Required fields
+    if (
+      !fullName ||
+      !email ||
+      !phone ||
+      !dob ||
+      !gender ||
+      !skills ||
+      !department ||
+      !address
+    ) {
       return res
         .status(400)
         .json({ success: false, message: 'All fields are required' });
@@ -19,17 +36,18 @@ exports.createEmployee = async (req, res, next) => {
 
     // resume & profileImage must be uploaded
     if (!req.files?.resume?.[0] || !req.files?.profileImage?.[0]) {
-      return res
-        .status(400)
-        .json({ success: false, message: 'Resume and Profile Image are required' });
+      return res.status(400).json({
+        success: false,
+        message: 'Resume and Profile Image are required',
+      });
     }
 
-    // parse skills (could be single or array)
+    // parse skills (string or array)
     if (typeof skills === 'string') {
-      skills = skills.split(',').map(s => s.trim());
+      skills = skills.split(',').map((s) => s.trim());
     }
 
-    // build object for DB
+    // build payload
     const payload = {
       fullName,
       email,
@@ -38,18 +56,24 @@ exports.createEmployee = async (req, res, next) => {
       gender,
       skills,
       department,
-      resume:       req.files.resume[0].filename,
+      resume: `${req.files.resume[0].filename}`,
       profileImage: `uploads/${req.files.profileImage[0].filename}`,
-      isActive:     isActive === 'true' || isActive === true,
+      // galleryImages might be undefined if none uploaded
+      galleryImages: (req.files.galleryImages || []).map(
+        (file) => `uploads/${file.filename}`
+      ),
+      isActive: isActive === 'true' || isActive === true,
       address,
     };
 
     const employee = await EmployeeService.createEmployee(payload);
-    res
-      .status(201)
-      .json({ success: true, message: 'Profile created successfully', data: employee });
+    return res.status(201).json({
+      success: true,
+      message: 'Profile created successfully',
+      data: employee,
+    });
   } catch (err) {
-    // duplicate email?
+    // duplicate email
     if (err.code === 11000) {
       return res
         .status(400)
@@ -108,45 +132,99 @@ exports.deleteEmployee = async (req, res) => {
   }
 };
 
-// Update employee by ID
+
 exports.updateEmployee = async (req, res) => {
   try {
     const { id } = req.params;
-    let { fullName, email, phone, dob, gender, department, address, skills, isActive } = req.body;
+    let {
+      fullName,
+      email,
+      phone,
+      dob,
+      gender,
+      department,
+      address,
+      isActive,
+      skills,
+      existingGalleryImages,
+    } = req.body;
 
     if (typeof skills === 'string') {
-      skills = skills.split(',').map(s => s.trim());
+      skills = skills.split(',').map((s) => s.trim());
     }
 
+    let gallery = [];
+    if (existingGalleryImages) {
+      gallery = Array.isArray(existingGalleryImages)
+        ? existingGalleryImages
+        : [existingGalleryImages];
+    }
+
+    const employee = await Employee.findById(id);
+    if (!employee) {
+      return res.status(404).json({ success: false, message: 'Employee not found' });
+    }
+
+    const uploadsDir = path.resolve(__dirname, '../uploads');
+
+    // 1. Delete old profile image if replaced
+    if (req.files?.profileImage?.[0]) {
+      if (employee.profileImage) {
+        const profileImagePath = path.join(uploadsDir, path.basename(employee.profileImage));
+        if (fs.existsSync(profileImagePath)) {
+          fs.unlinkSync(profileImagePath);
+        }
+      }
+    }
+
+    // 2. Delete removed gallery images
+    const oldGallery = employee.galleryImages || [];
+    const removed = oldGallery.filter((img) => !gallery.includes(img));
+    removed.forEach((img) => {
+      const imgPath = path.join(uploadsDir, path.basename(img));
+      if (fs.existsSync(imgPath)) {
+        fs.unlinkSync(imgPath);
+      }
+    });
+
+    // 3. Build update object
     const updateData = {
       fullName,
       email,
       phone,
       dob,
       gender,
-      skills,
       department,
       address,
+      skills,
       isActive: isActive === 'true' || isActive === true,
     };
 
-    // If files are updated
     if (req.files?.resume?.[0]) {
-      updateData.resume = req.files.resume[0].path;
+      updateData.resume = `${req.files.resume[0].filename}`;
     }
+
     if (req.files?.profileImage?.[0]) {
       updateData.profileImage = `uploads/${req.files.profileImage[0].filename}`;
     }
 
+    const newGallery = (req.files.galleryImages || []).map(
+      (file) => `uploads/${file.filename}`
+    );
+    updateData.galleryImages = [...gallery, ...newGallery];
+
     const updated = await Employee.findByIdAndUpdate(id, updateData, { new: true });
 
-    if (!updated) {
-      return res.status(404).json({ success: false, message: "Employee not found" });
-    }
-
-    res.status(200).json({ success: true, message: "Employee updated successfully", data: updated });
-  } catch (err) {
-    console.error("Update Error:", err);
-    res.status(500).json({ success: false, message: "Server error while updating employee" });
+    res.status(200).json({
+      success: true,
+      message: 'Employee updated successfully',
+      data: updated,
+    });
+  } catch (error) {
+    console.error('Update error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while updating employee',
+    });
   }
 };
